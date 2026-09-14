@@ -30,6 +30,12 @@ try {
     });
     const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.goto(url);await page.getByText('Shared test report',{exact:true}).first().waitFor();
+    const profileButton=page.getByRole('button',{name:'View account'});await profileButton.waitFor();assert.equal(await profileButton.isVisible(),true,`profile control is hidden at ${width}`);
+    if(width<=1024)assert.equal(await page.locator('.profile-summary').isVisible(),false,`profile summary is not compact at ${width}`);
+    await expectThemeStable(page,'profile control',()=>profileButton.click());
+    await page.getByRole('dialog',{name:'Account'}).waitFor();assert.equal(await page.getByText('fixture@example.invalid',{exact:true}).count(),1);
+    await page.getByRole('button',{name:'Close account'}).click();
+    if(width<=1024){await page.evaluate(()=>scrollTo(0,document.body.scrollHeight));await page.waitForTimeout(80);assert.equal(await page.evaluate(()=>{const header=document.querySelector('header').getBoundingClientRect(),nav=document.querySelector('header nav').getBoundingClientRect();return header.top>=0&&header.top<=1&&nav.top>=header.top&&nav.bottom<=header.bottom+1;}),true,`mobile header is not sticky at ${width}`);}
     assert.equal(await page.getByText('Needs Attention',{exact:true}).count(),1);
     assert.equal(await page.getByText('Recent Updates',{exact:true}).count(),1);
     await expectThemeStable(page,'empty space',()=>page.mouse.click(10,900));
