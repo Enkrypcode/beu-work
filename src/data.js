@@ -11,5 +11,11 @@ export async function loadSnapshot(signal) {
     if (error.code === '42501') throw new Error('Your account does not yet have BEU Work monitoring access. Contact your administrator.');
     throw new Error('Could not refresh shared work. Check your connection and try again.');
   }
-  return validateSnapshot(data);
+  const snapshot = validateSnapshot(data);
+  const people = await Promise.all(snapshot.people.map(async person => {
+    if (!person.avatar_path) return person;
+    const { data: signed, error: avatarError } = await supabase.storage.from('profile-avatars').createSignedUrl(person.avatar_path, 3600);
+    return avatarError ? person : { ...person, avatar_url: signed.signedUrl };
+  }));
+  return { ...snapshot, people };
 }

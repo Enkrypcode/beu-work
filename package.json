@@ -7,6 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "generate:pwa-icons": "node scripts/generate-pwa-icons.mjs",
+    "prepare:profile-avatars": "node scripts/prepare-profile-avatars.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --test"
   },
