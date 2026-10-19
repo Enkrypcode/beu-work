@@ -30,6 +30,22 @@ try {
     });
     const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.goto(url);await page.getByText('Shared test report',{exact:true}).first().waitFor();
+    await page.getByText('Agenda Timeline',{exact:true}).waitFor();
+    assert.equal(await page.locator('[data-agenda-index]').count(),5,`agenda nodes are incomplete at ${width}`);
+    assert.equal(await page.locator('.agenda-avatar .avatar-initials').count(),1,`agenda avatar fallback is missing at ${width}`);
+    await expectThemeStable(page,'agenda node',()=>page.locator('[data-agenda-index="2"]').click());
+    await page.locator('.agenda-detail h3').filter({hasText:'Koordinasi Tim'}).waitFor();
+    await expectThemeStable(page,'agenda next button',()=>page.getByRole('button',{name:'Agenda berikutnya'}).click());
+    await page.locator('.agenda-detail h3').filter({hasText:'Monitoring Progress'}).waitFor();
+    const agendaViewport=page.locator('[data-agenda-viewport]');
+    assert.equal(await agendaViewport.evaluate(node=>getComputedStyle(node).touchAction),'pan-x',`agenda viewport is not swipeable at ${width}`);
+    if(width<=1024){
+      await agendaViewport.evaluate(node=>{node.scrollLeft=0;});
+      const box=await agendaViewport.boundingBox();
+      await page.mouse.move(box.x+box.width-16,box.y+18);await page.mouse.down();await page.mouse.move(box.x+18,box.y+18,{steps:6});await page.mouse.up();
+      assert.ok(await agendaViewport.evaluate(node=>node.scrollLeft)>0,`agenda timeline did not drag at ${width}`);
+    }
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`dashboard overflows with agenda at ${width}`);
     const profileButton=page.getByRole('button',{name:'View account'});await profileButton.waitFor();assert.equal(await profileButton.isVisible(),true,`profile control is hidden at ${width}`);
     if(width<=1024)assert.equal(await page.locator('.profile-summary').isVisible(),false,`profile summary is not compact at ${width}`);
     await expectThemeStable(page,'profile control',()=>profileButton.click());

@@ -8,7 +8,7 @@ let selectedTheme = document.documentElement.dataset.theme === 'dark' ? 'dark' :
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
 const formatDate = date => date ? new Intl.DateTimeFormat('en-GB', {day:'numeric',month:'short',year:'numeric'}).format(new Date(`${date}T12:00:00`)) : 'No deadline';
 const initialFilters = () => ({search:'', person:'', category:'', priority:'', deadline:'', status:''});
-let user = null, people = [], tasks = [], page = 'dashboard', selectedPersonId = null;
+let user = null, people = [], tasks = [], page = 'dashboard', selectedPersonId = null, selectedAgendaIndex = 0;
 function syncRoute() {
   const route = location.hash.slice(1);
   const personRoute = route.match(/^people\/([^/]+)$/);
@@ -63,13 +63,28 @@ function recentUpdatesPanel() {
   const recent = [...tasks].sort((a,b)=>new Date(b.updated_at).getTime()-new Date(a.updated_at).getTime()).slice(0,5);
   return panel('Recent Updates','Recently updated company-shared work.',recent.length ? `<div class="recent-list">${recent.map(t=>`<button class="recent-item" data-detail="${escape(t.id)}"><span><strong>${escape(t.title)}</strong><small>${escape(personName(personFor(t.user_id)))}</small></span><time datetime="${escape(t.updated_at || '')}">${escape(relativeUpdated(t.updated_at))}</time></button>`).join('')}</div>` : '<p class="quiet">No shared work has been updated yet.</p>','','calendar');
 }
+const agendaItems = [
+  { date:'19 Oktober 2026', title:'Rapat Awal', description:'Menyamakan arah kerja dan ruang lingkup kegiatan.', discusses:'Tujuan kegiatan, ruang lingkup, dan pihak yang terlibat.', goal:'Menyamakan persepsi serta menetapkan dasar pelaksanaan kegiatan.', status:'Selesai', picIndex:0 },
+  { date:'22 Oktober 2026', title:'Penyusunan Jadwal', description:'Rencana kegiatan dan pembagian waktu.', discusses:'Urutan kegiatan, kebutuhan waktu, dan titik koordinasi.', goal:'Menyepakati jadwal kerja yang realistis dan mudah dipantau.', status:'Berlangsung', picIndex:1 },
+  { date:'26 Oktober 2026', title:'Koordinasi Tim', description:'Sinkronisasi dengan tim terkait.', discusses:'Peran PIC, kebutuhan dukungan, dan tindak lanjut tiap tim.', goal:'Menjaga kesiapan tim dan kelancaran pelaksanaan agenda.', status:'Belum Dimulai', picIndex:2 },
+  { date:'30 Oktober 2026', title:'Monitoring Progress', description:'Evaluasi dan tindak lanjut kegiatan.', discusses:'Capaian sementara, hambatan, dan kebutuhan keputusan.', goal:'Memastikan progres tetap sesuai jadwal dan sasaran.', status:'Belum Dimulai', picIndex:3 },
+  { date:'2 November 2026', title:'Evaluasi Akhir', description:'Tinjau hasil dan rencana selanjutnya.', discusses:'Hasil pelaksanaan, catatan pembelajaran, dan langkah berikutnya.', goal:'Merangkum hasil dan menyiapkan tindak lanjut yang jelas.', status:'Belum Dimulai', picIndex:0 }
+];
+const agendaStatusClass = status => ({'Belum Dimulai':'not-started',Berlangsung:'in-progress',Selesai:'complete'}[status] || 'not-started');
+const agendaPerson = item => people.length ? people[item.picIndex % people.length] : { full_name:'PIC belum tersedia', job_title:'Agenda Timeline' };
+function agendaTimeline() {
+  const active = agendaItems[selectedAgendaIndex] || agendaItems[0];
+  const pic = agendaPerson(active);
+  const detail = `<section class="agenda-detail" aria-live="polite"><div class="agenda-date-tile"><strong>${escape(active.date.split(' ')[0])}</strong><span>${escape(active.date.split(' ').slice(1).join(' '))}</span></div><div class="agenda-detail-title"><div><p class="eyebrow">AGENDA TERPILIH</p><h3>${escape(active.title)}</h3><p>${escape(active.description)}</p></div><span class="agenda-status ${agendaStatusClass(active.status)}">${escape(active.status)}</span></div><dl class="agenda-facts"><div><dt>Tanggal</dt><dd>${escape(active.date)}</dd></div><div><dt>Agenda</dt><dd>${escape(active.title)}</dd></div><div><dt>Membahas</dt><dd>${escape(active.discusses)}</dd></div><div><dt>Tujuan</dt><dd>${escape(active.goal)}</dd></div><div><dt>PIC</dt><dd><span class="agenda-pic">${avatar(pic, 'avatar agenda-avatar')}<span><strong>${escape(personName(pic))}</strong><small>${escape(pic.job_title || 'PIC Agenda')}</small></span></span></dd></div><div><dt>Status</dt><dd><span class="agenda-status ${agendaStatusClass(active.status)}">${escape(active.status)}</span></dd></div></dl></section>`;
+  return `<section class="panel agenda-timeline" aria-labelledby="agenda-timeline-title"><div class="panel-heading agenda-heading"><span class="panel-icon">${icon('calendar')}</span><div><h2 id="agenda-timeline-title">Agenda Timeline</h2><p>Rangkaian agenda penting dalam periode ini. Geser atau tarik timeline untuk melihat agenda lainnya.</p></div><div class="agenda-controls"><button type="button" class="icon-button agenda-arrow" data-agenda-nav="previous" aria-label="Agenda sebelumnya">‹</button><button type="button" class="icon-button agenda-arrow" data-agenda-nav="next" aria-label="Agenda berikutnya">›</button></div></div><div class="agenda-viewport" data-agenda-viewport aria-label="Agenda timeline yang dapat digeser"><div class="agenda-track">${agendaItems.map((item,index)=>`<button type="button" class="agenda-node ${agendaStatusClass(item.status)} ${index===selectedAgendaIndex?'selected':''}" data-agenda-index="${index}" aria-pressed="${index===selectedAgendaIndex}"><span class="agenda-line" aria-hidden="true"></span><span class="agenda-number">${String(index+1).padStart(2,'0')}</span><time>${escape(item.date)}</time><strong>${escape(item.title)}</strong><small>${escape(item.description)}</small></button>`).join('')}</div></div>${detail}</section>`;
+}
 function dashboard() {
   const m = metrics(tasks), feed = priorityFeed(tasks).slice(0,6);
   const contributors = people.map(p => ({...p, count: tasks.filter(t=>t.user_id===p.user_id).length})).filter(p=>p.count).sort((a,b)=>b.count-a.count);
   const categories = [...new Set(tasks.map(t=>t.category || 'Other'))].map(name=>({name,count:tasks.filter(t=>(t.category||'Other')===name && t.status==='active').length})).filter(c=>c.count).sort((a,b)=>b.count-a.count);
   const upcoming = tasks.filter(t=>deadlineMatches(t,'soon')).sort((a,b)=>a.deadline.localeCompare(b.deadline)).slice(0,5);
   const stats = [['Shared Works',m.shared,'Explicitly shared from BEU Priority','work','blue'],['Connected Accounts',contributors.length,'Accounts contributing shared work','people','teal'],['High Priority',m.high,'Active work in owner positions 1–3','flag','red'],['Upcoming Deadlines',m.upcoming,'Active work due in the next 7 days','calendar','violet']];
-  return `<div class="stats">${stats.map(([label,count,hint,symbol,tone])=>`<section class="stat"><span class="stat-icon ${tone}">${icon(symbol)}</span><div><p>${label}</p><strong>${loaded ? count : '—'}</strong><small>${hint}</small></div></section>`).join('')}</div><div class="dashboard-grid"><div class="feed-col">${panel('Combined Priority Feed','The priorities your team chose to share.',feed.length ? feed.map(workCard).join('') : empty('No active shared work','Work appears here after its owner shares it from BEU Priority.'),allWork,'flag')}${attentionPanel()}${recentUpdatesPanel()}</div><div class="side-col">${panel('Priority Sources','People contributing to our shared view.',contributors.length ? `<div class="sources">${contributors.map(p=>`<div class="source">${personLabel(p)}<span class="source-count">${p.count}<small>shared</small></span></div>`).join('')}</div>` : empty('No sources yet','Only accounts with company-shared work appear here.'),'<button class="text-button" data-page="people">People '+icon('arrow')+'</button>','people')}${panel('Upcoming Deadlines','Active shared work due in the next 7 days.',upcoming.length ? upcoming.map(t=>`<div class="deadline-row"><span class="date-tile">${Number(t.deadline.slice(8))}<small>${new Intl.DateTimeFormat('en',{month:'short'}).format(new Date(t.deadline+'T12:00:00'))}</small></span><div><button class="task-title" data-detail="${escape(t.id)}">${escape(t.title)}</button><small>${escape(personName(personFor(t.user_id)))}</small></div></div>`).join('') : empty('No upcoming deadlines','There is no active shared work due in the next 7 days.'),'','calendar')}${panel('Shared by Category','Distribution of active shared work.',categories.length ? `<div class="category-bars">${categories.map(c=>`<div><span>${escape(c.name)}</span><meter min="0" max="${Math.max(...categories.map(v=>v.count))}" value="${c.count}">${c.count}</meter><strong>${c.count}</strong></div>`).join('')}</div>` : '<p class="quiet">No active shared work to group.</p>')}</div></div>`;
+  return `${agendaTimeline()}<div class="stats">${stats.map(([label,count,hint,symbol,tone])=>`<section class="stat"><span class="stat-icon ${tone}">${icon(symbol)}</span><div><p>${label}</p><strong>${loaded ? count : '—'}</strong><small>${hint}</small></div></section>`).join('')}</div><div class="dashboard-grid"><div class="feed-col">${panel('Combined Priority Feed','The priorities your team chose to share.',feed.length ? feed.map(workCard).join('') : empty('No active shared work','Work appears here after its owner shares it from BEU Priority.'),allWork,'flag')}${attentionPanel()}${recentUpdatesPanel()}</div><div class="side-col">${panel('Priority Sources','People contributing to our shared view.',contributors.length ? `<div class="sources">${contributors.map(p=>`<div class="source">${personLabel(p)}<span class="source-count">${p.count}<small>shared</small></span></div>`).join('')}</div>` : empty('No sources yet','Only accounts with company-shared work appear here.'),'<button class="text-button" data-page="people">People '+icon('arrow')+'</button>','people')}${panel('Upcoming Deadlines','Active shared work due in the next 7 days.',upcoming.length ? upcoming.map(t=>`<div class="deadline-row"><span class="date-tile">${Number(t.deadline.slice(8))}<small>${new Intl.DateTimeFormat('en',{month:'short'}).format(new Date(t.deadline+'T12:00:00'))}</small></span><div><button class="task-title" data-detail="${escape(t.id)}">${escape(t.title)}</button><small>${escape(personName(personFor(t.user_id)))}</small></div></div>`).join('') : empty('No upcoming deadlines','There is no active shared work due in the next 7 days.'),'','calendar')}${panel('Shared by Category','Distribution of active shared work.',categories.length ? `<div class="category-bars">${categories.map(c=>`<div><span>${escape(c.name)}</span><meter min="0" max="${Math.max(...categories.map(v=>v.count))}" value="${c.count}">${c.count}</meter><strong>${c.count}</strong></div>`).join('')}</div>` : '<p class="quiet">No active shared work to group.</p>')}</div></div>`;
 }
 function selectFilter(name, label, options) {
   return `<label class="filter"><span>${label}</span><select name="${name}" aria-label="Filter by ${label}"><option value="">All ${label.toLowerCase()}</option>${options.map(([value,text])=>`<option value="${escape(value)}" ${filters[name]===value?'selected':''}>${escape(text)}</option>`).join('')}</select></label>`;
@@ -117,8 +132,52 @@ function applyTheme(theme) { selectedTheme = theme === 'dark' ? 'dark' : 'light'
 function toggleTheme(event) { event.preventDefault(); event.stopPropagation(); applyTheme(selectedTheme === 'dark' ? 'light' : 'dark'); }
 function bindThemeToggle() { const button = document.querySelector('#theme-toggle'); button?.addEventListener('click', toggleTheme); }
 function navigate(next) { location.hash=next; }
+function centerAgendaItem(index, focus = false) {
+  const viewport = document.querySelector('[data-agenda-viewport]');
+  const item = document.querySelector(`[data-agenda-index="${index}"]`);
+  if (!viewport || !item) return;
+  viewport.scrollTo({ left: Math.max(0, item.offsetLeft - (viewport.clientWidth - item.clientWidth) / 2), behavior:'smooth' });
+  if (focus) item.focus({ preventScroll:true });
+}
+function selectAgenda(index, focus = false) {
+  selectedAgendaIndex = (index + agendaItems.length) % agendaItems.length;
+  render();
+  requestAnimationFrame(() => centerAgendaItem(selectedAgendaIndex, focus));
+}
+function bindAgendaTimeline() {
+  const viewport = document.querySelector('[data-agenda-viewport]');
+  if (!viewport) return;
+  let dragging = false, startX = 0, startScroll = 0, moved = false;
+  viewport.addEventListener('pointerdown', event => {
+    if (event.pointerType !== 'mouse' || event.button !== 0) return;
+    dragging = true; moved = false; startX = event.clientX; startScroll = viewport.scrollLeft;
+    viewport.setPointerCapture(event.pointerId); viewport.classList.add('is-dragging');
+  });
+  viewport.addEventListener('pointermove', event => {
+    if (!dragging) return;
+    const distance = event.clientX - startX;
+    if (Math.abs(distance) > 4) moved = true;
+    viewport.scrollLeft = startScroll - distance;
+  });
+  const stopDragging = event => {
+    if (!dragging) return;
+    dragging = false; viewport.classList.remove('is-dragging');
+    if (viewport.hasPointerCapture(event.pointerId)) viewport.releasePointerCapture(event.pointerId);
+    if (moved) requestAnimationFrame(() => { moved = false; });
+  };
+  viewport.addEventListener('pointerup', stopDragging);
+  viewport.addEventListener('pointercancel', stopDragging);
+  document.querySelectorAll('[data-agenda-index]').forEach(node => node.addEventListener('click', event => {
+    if (moved) { event.preventDefault(); return; }
+    selectAgenda(Number(node.dataset.agendaIndex), true);
+  }));
+  document.querySelectorAll('[data-agenda-nav]').forEach(button => button.addEventListener('click', () => {
+    selectAgenda(selectedAgendaIndex + (button.dataset.agendaNav === 'next' ? 1 : -1), true);
+  }));
+}
 function bind() {
   bindThemeToggle();
+  bindAgendaTimeline();
   document.querySelector('[data-profile]')?.addEventListener('click',()=>{profileOpen=!profileOpen;render();});
   document.querySelector('[data-close-profile]')?.addEventListener('click',()=>{profileOpen=false;render();});
   document.querySelector('[data-signout]').onclick=async()=>{const result=await supabase.auth.signOut({scope:'local'});if(result.error){error='Could not sign out. Try again.';render();}};
