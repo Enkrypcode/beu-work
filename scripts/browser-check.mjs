@@ -7,7 +7,7 @@ const widths=(process.env.BEU_TEST_WIDTHS || '1440,1024,820,390,320').split(',')
 const initialTheme=process.env.BEU_TEST_THEME === 'dark' ? 'dark' : 'light';
 const browser=await chromium.launch({channel:process.env.BEU_TEST_BROWSER || 'chrome',headless:true});
 const person={user_id:'00000000-0000-0000-0000-000000000001',full_name:'Test Monitor',job_title:'Monitoring Role'};
-const owner={user_id:'00000000-0000-0000-0000-000000000002',full_name:'Test Contributor',job_title:'Contributor Role',timeline_color:'#22396F'};
+const owner={user_id:'93b522ba-bb9a-4c35-925f-010434f59166',full_name:'Test Contributor',job_title:'Contributor Role'};
 const dateAt = offset => { const date = new Date(); date.setHours(12,0,0,0); date.setDate(date.getDate()+offset); return date.toISOString().slice(0,10); };
 const task={id:'10000000-0000-0000-0000-000000000001',user_id:owner.user_id,title:'Shared test report',category:'Report',sort_order:0,deadline:dateAt(-1),status:'active',visibility:'company',created_at:'2026-09-01T05:00:00Z',updated_at:new Date(Date.now()-12*60*1000).toISOString()};
 const secondTask={id:'10000000-0000-0000-0000-000000000003',user_id:owner.user_id,title:'Due today shared work',category:'Tender',sort_order:1,deadline:dateAt(0),status:'active',visibility:'company',created_at:'2026-09-02T05:00:00Z',updated_at:new Date(Date.now()-60*60*1000).toISOString()};

@@ -26,8 +26,14 @@ const brand = () => `<a class="brand" href="#dashboard"><img src="/assets/logo-m
 const personFor = id => people.find(p => p.user_id === id);
 const initials = p => (p?.full_name || '?').split(/\s+/).slice(0,2).map(v => v[0]).join('').toUpperCase();
 const personName = p => p?.full_name || 'Profile not set';
-function timelinePresentation(person) {
-  const color = typeof person?.timeline_color === 'string' && /^#[0-9a-f]{6}$/i.test(person.timeline_color) ? person.timeline_color.toUpperCase() : null;
+const TIMELINE_OWNER_COLORS = Object.freeze({
+  '93b522ba-bb9a-4c35-925f-010434f59166':'#22396F',
+  '1ec01fcb-1f91-48b0-a798-04ddcacc5d3e':'#8ACFF8',
+  'a9d3bc00-5ade-4b13-b3de-5376408addfb':'#FCF9EA',
+  '2fd2b23a-947a-4c64-a718-6f36ab01119e':'#FFCED8'
+});
+function timelinePresentation(userId) {
+  const color = TIMELINE_OWNER_COLORS[userId] || null;
   if (!color) return { className:'', style:'' };
   const rgb = [1,3,5].map(offset => Number.parseInt(color.slice(offset, offset + 2), 16));
   const luminance = ([red, green, blue]) => [red, green, blue].map(value => {
@@ -93,10 +99,10 @@ function workTimeline() {
   const activeIndex = entries.findIndex(task => task.id === selectedTimelineId);
   const active = entries[activeIndex];
   const pic = personFor(active.user_id);
-  const activePresentation = timelinePresentation(pic);
+  const activePresentation = timelinePresentation(active.user_id);
   const [day, ...monthYear] = deadlineParts(active.deadline);
   const detail = `<section class="agenda-detail ${activePresentation.className}"${activePresentation.style} aria-live="polite"><div class="agenda-date-tile"><strong>${escape(day)}</strong><span>${escape(monthYear.join(' '))}</span></div><div class="agenda-detail-title"><div><p class="eyebrow">SELECTED WORK</p><h3>${escape(active.title)}</h3><p>${escape(formatDate(active.deadline))}</p></div>${status(active)}</div><dl class="agenda-facts"><div><dt>PIC</dt><dd><span class="agenda-pic">${avatar(pic, 'avatar agenda-avatar')}<span><strong>${escape(personName(pic))}</strong><small>${escape(pic?.job_title || 'Job title not set')}</small></span></span></dd></div><div><dt>Job Title</dt><dd>${escape(pic?.job_title || 'Job title not set')}</dd></div><div><dt>Category</dt><dd>${escape(active.category || 'Other')}</dd></div><div><dt>Priority</dt><dd>${priority(active)}</dd></div><div><dt>Deadline</dt><dd>${escape(formatDate(active.deadline))}</dd></div><div><dt>Status</dt><dd>${status(active)}</dd></div><div><dt>Created</dt><dd>${escape(dateTime(active.created_at))}</dd></div><div><dt>Last Updated</dt><dd>${escape(dateTime(active.updated_at))}</dd></div></dl></section>`;
-  return `<section class="panel agenda-timeline" aria-labelledby="work-timeline-title"><div class="panel-heading agenda-heading"><span class="panel-icon">${icon('calendar')}</span><div><h2 id="work-timeline-title">Work Timeline</h2><p>Active company-shared work with deadlines, ordered by date. Drag or swipe to view more.</p></div><div class="agenda-controls"><button type="button" class="icon-button agenda-arrow" data-timeline-nav="previous" aria-label="Previous work">‹</button><button type="button" class="icon-button agenda-arrow" data-timeline-nav="next" aria-label="Next work">›</button></div></div><div class="agenda-viewport" data-timeline-viewport aria-label="Work timeline"><div class="agenda-track">${entries.map((task,index)=>{const owner=personFor(task.user_id), presentation=timelinePresentation(owner);return `<button type="button" class="agenda-node ${timelineTone(task)} ${presentation.className} ${task.id===active.id?'selected':''}"${presentation.style} data-timeline-id="${escape(task.id)}" aria-pressed="${task.id===active.id}"><span class="agenda-line" aria-hidden="true"></span><span class="agenda-number">${String(index+1).padStart(2,'0')}</span><time>${escape(formatDate(task.deadline))}</time><strong>${escape(task.title)}</strong><small>${escape(personName(owner))}${task.category ? ` · ${escape(task.category)}` : ''}</small></button>`;}).join('')}</div></div>${detail}</section>`;
+  return `<section class="panel agenda-timeline" aria-labelledby="work-timeline-title"><div class="panel-heading agenda-heading"><span class="panel-icon">${icon('calendar')}</span><div><h2 id="work-timeline-title">Work Timeline</h2><p>Active company-shared work with deadlines, ordered by date. Drag or swipe to view more.</p></div><div class="agenda-controls"><button type="button" class="icon-button agenda-arrow" data-timeline-nav="previous" aria-label="Previous work">‹</button><button type="button" class="icon-button agenda-arrow" data-timeline-nav="next" aria-label="Next work">›</button></div></div><div class="agenda-viewport" data-timeline-viewport aria-label="Work timeline"><div class="agenda-track">${entries.map((task,index)=>{const owner=personFor(task.user_id), presentation=timelinePresentation(task.user_id);return `<button type="button" class="agenda-node ${timelineTone(task)} ${presentation.className} ${task.id===active.id?'selected':''}"${presentation.style} data-timeline-id="${escape(task.id)}" aria-pressed="${task.id===active.id}"><span class="agenda-line" aria-hidden="true"></span><span class="agenda-number">${String(index+1).padStart(2,'0')}</span><time>${escape(formatDate(task.deadline))}</time><strong>${escape(task.title)}</strong><small>${escape(personName(owner))}${task.category ? ` · ${escape(task.category)}` : ''}</small></button>`;}).join('')}</div></div>${detail}</section>`;
 }
 function dashboard() {
   const m = metrics(tasks), feed = priorityFeed(tasks).slice(0,6);
