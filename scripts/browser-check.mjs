@@ -12,6 +12,8 @@ const dateAt = offset => { const date = new Date(); date.setHours(12,0,0,0); dat
 const task={id:'10000000-0000-0000-0000-000000000001',user_id:owner.user_id,title:'Shared test report',category:'Report',sort_order:0,deadline:dateAt(-1),status:'active',visibility:'company',created_at:'2026-09-01T05:00:00Z',updated_at:new Date(Date.now()-12*60*1000).toISOString()};
 const secondTask={id:'10000000-0000-0000-0000-000000000003',user_id:owner.user_id,title:'Due today shared work',category:'Tender',sort_order:1,deadline:dateAt(0),status:'active',visibility:'company',created_at:'2026-09-02T05:00:00Z',updated_at:new Date(Date.now()-60*60*1000).toISOString()};
 const doneTask={id:'10000000-0000-0000-0000-000000000004',user_id:owner.user_id,title:'Completed shared work',category:'Report',sort_order:2,deadline:dateAt(-2),status:'done',visibility:'company',created_at:'2026-09-03T05:00:00Z',updated_at:new Date(Date.now()-2*60*60*1000).toISOString(),completed_at:new Date(Date.now()-2*60*60*1000).toISOString()};
+const noDeadlineTask={id:'10000000-0000-0000-0000-000000000005',user_id:owner.user_id,title:'No deadline shared work',category:'Admin',sort_order:3,deadline:null,status:'active',visibility:'company',created_at:'2026-09-04T05:00:00Z',updated_at:new Date(Date.now()-3*60*60*1000).toISOString()};
+const futureTimelineTasks=Array.from({length:7},(_,index)=>({id:`10000000-0000-0000-0000-0000000001${index}`,user_id:owner.user_id,title:`Upcoming timeline work ${index+1}`,category:'Planning',sort_order:index+4,deadline:dateAt(index+1),status:'active',visibility:'company',created_at:`2026-09-${String(index+5).padStart(2,'0')}T05:00:00Z`,updated_at:new Date(Date.now()-(index+4)*60*60*1000).toISOString()}));
 const session={access_token:'test-access-token',refresh_token:'test-refresh-token',token_type:'bearer',expires_in:3600,expires_at:Math.floor(Date.now()/1000)+3600,user:{id:person.user_id,email:'fixture@example.invalid',aud:'authenticated',role:'authenticated',app_metadata:{provider:'email'},user_metadata:{},created_at:'2026-09-01T00:00:00Z'}};
 const themeState=page=>page.evaluate(()=>({theme:document.documentElement.dataset.theme,stored:localStorage.getItem('beu-work-theme')}));
 async function expectThemeStable(page,label,action){const before=await themeState(page);await action();await page.waitForTimeout(80);assert.deepEqual(await themeState(page),before,`${label} changed the theme`);}
@@ -24,28 +26,52 @@ try {
     await context.route('**/*',async route=>{
       const request=route.request();const requestUrl=new URL(request.url());
       if(requestUrl.origin===url)return route.continue();
-      if(requestUrl.pathname==='/rest/v1/rpc/beu_work_snapshot')return route.fulfill({json:{tasks:bad?[{...task,visibility:'private'}]:[task,secondTask,doneTask],people:[person,owner]}});
+      if(requestUrl.pathname==='/rest/v1/rpc/beu_work_snapshot')return route.fulfill({json:{tasks:bad?[{...task,visibility:'private'}]:[task,secondTask,...futureTimelineTasks,doneTask,noDeadlineTask],people:[person,owner]}});
       if(requestUrl.pathname.startsWith('/auth/v1/'))return route.fulfill({json:{user:session.user}});
       return route.abort();
     });
     const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.goto(url);await page.getByText('Shared test report',{exact:true}).first().waitFor();
-    await page.getByText('Agenda Timeline',{exact:true}).waitFor();
-    assert.equal(await page.locator('[data-agenda-index]').count(),5,`agenda nodes are incomplete at ${width}`);
-    assert.equal(await page.locator('.agenda-avatar .avatar-initials').count(),1,`agenda avatar fallback is missing at ${width}`);
-    await expectThemeStable(page,'agenda node',()=>page.locator('[data-agenda-index="2"]').click());
-    await page.locator('.agenda-detail h3').filter({hasText:'Koordinasi Tim'}).waitFor();
-    await expectThemeStable(page,'agenda next button',()=>page.getByRole('button',{name:'Agenda berikutnya'}).click());
-    await page.locator('.agenda-detail h3').filter({hasText:'Monitoring Progress'}).waitFor();
-    const agendaViewport=page.locator('[data-agenda-viewport]');
-    assert.equal(await agendaViewport.evaluate(node=>getComputedStyle(node).touchAction),'pan-x',`agenda viewport is not swipeable at ${width}`);
+    await page.getByText('Work Timeline',{exact:true}).waitFor();
+    assert.equal(await page.locator('[data-timeline-id]').count(),9,`timeline includes a completed or no-deadline work at ${width}`);
+    assert.equal(await page.locator('[data-timeline-id]').evaluateAll(nodes=>new Set(nodes.map(node=>Math.round(node.getBoundingClientRect().top))).size),1,`timeline wrapped into multiple rows at ${width}`);
+    assert.equal(await page.locator('.agenda-avatar .avatar-initials').count(),1,`timeline avatar fallback is missing at ${width}`);
+    await expectThemeStable(page,'timeline node',()=>page.locator(`[data-timeline-id="${secondTask.id}"]`).click());
+    await page.locator('.agenda-detail h3').filter({hasText:secondTask.title}).waitFor();
+    await expectThemeStable(page,'timeline next button',()=>page.getByRole('button',{name:'Next work'}).click());
+    await page.locator('.agenda-detail h3').filter({hasText:futureTimelineTasks[0].title}).waitFor();
+    const agendaViewport=page.locator('[data-timeline-viewport]');
+    assert.equal(await agendaViewport.evaluate(node=>getComputedStyle(node).touchAction),'pan-x',`timeline viewport is not swipeable at ${width}`);
+    await agendaViewport.evaluate(node=>{node.style.scrollBehavior='auto';node.scrollLeft=node.scrollWidth;node.style.scrollBehavior='';});
+    const latePosition=await agendaViewport.evaluate(node=>node.scrollLeft);
+    const lastTimelineTask=futureTimelineTasks.at(-1), previousTimelineTask=futureTimelineTasks.at(-2);
+    await page.locator(`[data-timeline-id="${lastTimelineTask.id}"]`).click();
+    await page.locator('.agenda-detail h3').filter({hasText:lastTimelineTask.title}).waitFor();
+    await page.waitForTimeout(100);
+    assert.ok(await agendaViewport.evaluate(node=>node.scrollLeft)>=latePosition-2,`late node selection reset timeline at ${width}`);
+    await page.getByRole('button',{name:'Previous work'}).click();
+    await page.locator('.agenda-detail h3').filter({hasText:previousTimelineTask.title}).waitFor();
+    await page.waitForTimeout(350);
+    const beforeVisibleSelection=await agendaViewport.evaluate(node=>node.scrollLeft);
+    await page.locator(`[data-timeline-id="${previousTimelineTask.id}"]`).click();
+    await page.waitForTimeout(350);
+    const persistedPosition=await agendaViewport.evaluate(node=>node.scrollLeft);
+    assert.ok(Math.abs(persistedPosition-beforeVisibleSelection)<2,`visible node scrolled unnecessarily at ${width}`);
+    await page.getByRole('button',{name:'Refresh',exact:true}).click();
+    await page.locator('.agenda-detail h3').filter({hasText:previousTimelineTask.title}).waitFor();
+    await page.waitForTimeout(100);
+    assert.ok(Math.abs((await agendaViewport.evaluate(node=>node.scrollLeft))-persistedPosition)<2,`refresh changed timeline position at ${width}`);
+    await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+    await page.waitForTimeout(100);
+    assert.equal(await page.locator(`[data-timeline-id="${previousTimelineTask.id}"]`).getAttribute('aria-pressed'),'true',`focus changed selected timeline work at ${width}`);
+    assert.ok(Math.abs((await agendaViewport.evaluate(node=>node.scrollLeft))-persistedPosition)<2,`focus changed timeline position at ${width}`);
     if(width<=1024){
       await agendaViewport.evaluate(node=>{node.scrollLeft=0;});
       const box=await agendaViewport.boundingBox();
-      await page.mouse.move(box.x+box.width-16,box.y+18);await page.mouse.down();await page.mouse.move(box.x+18,box.y+18,{steps:6});await page.mouse.up();
-      assert.ok(await agendaViewport.evaluate(node=>node.scrollLeft)>0,`agenda timeline did not drag at ${width}`);
+      await page.mouse.move(box.x+box.width-16,box.y+4);await page.mouse.down();await page.mouse.move(box.x+18,box.y+4,{steps:6});await page.mouse.up();
+      assert.ok(await agendaViewport.evaluate(node=>node.scrollLeft)>0,`work timeline did not drag at ${width}`);
     }
-    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`dashboard overflows with agenda at ${width}`);
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,`dashboard overflows with work timeline at ${width}`);
     const profileButton=page.getByRole('button',{name:'View account'});await profileButton.waitFor();assert.equal(await profileButton.isVisible(),true,`profile control is hidden at ${width}`);
     if(width<=1024)assert.equal(await page.locator('.profile-summary').isVisible(),false,`profile summary is not compact at ${width}`);
     await expectThemeStable(page,'profile control',()=>profileButton.click());
@@ -104,7 +130,10 @@ try {
       return route.abort();
     });
     const page=await context.newPage();await page.goto(url);
-    if(state==='empty')await page.getByText('No active shared work',{exact:true}).waitFor();else await page.getByRole('alert').waitFor();
+    if(state==='empty'){
+      await page.getByText('No active shared work',{exact:true}).waitFor();
+      await page.getByText('No active work with deadlines',{exact:true}).waitFor();
+    }else await page.getByRole('alert').waitFor();
     assert.equal(await page.getByRole('button',{name:'Shared test report',exact:true}).count(),0);
     await context.close();console.log(`Passed ${state} state without loading private data`);
   }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateSnapshot, filterWork, metrics, deadlineMatches, isHigh, attentionWork } from '../src/model.js';
+import { validateSnapshot, filterWork, metrics, deadlineMatches, isHigh, attentionWork, timelineWork } from '../src/model.js';
 const now = new Date(2026,8,14,12);
 const tasks = [
   {id:'a',user_id:'one',title:'Shared report',visibility:'company',status:'active',sort_order:0,category:'Report',deadline:'2026-09-13'},
@@ -41,4 +41,15 @@ test('attention includes only active overdue, today, and next-three-day work',()
   assert.deepEqual(attention.overdue.map(t=>t.id),['a']);
   assert.deepEqual(attention.today.map(t=>t.id),['b']);
   assert.deepEqual(attention.soon.map(t=>t.id),['d']);
+});
+test('timeline contains only active company work with deadlines and sorts by deadline then owner order',()=>{
+  const timeline = timelineWork([
+    {...tasks[1], id:'later', deadline:'2026-09-23', sort_order:0, created_at:'2026-09-04T00:00:00Z'},
+    {...tasks[0], id:'same-second', deadline:'2026-09-20', sort_order:2, created_at:'2026-09-03T00:00:00Z'},
+    {...tasks[0], id:'same-first', deadline:'2026-09-20', sort_order:1, created_at:'2026-09-04T00:00:00Z'},
+    {...tasks[2], id:'done', deadline:'2026-09-12'},
+    {...tasks[0], id:'no-deadline', deadline:null},
+    {...tasks[0], id:'private', visibility:'private', deadline:'2026-09-11'},
+  ]);
+  assert.deepEqual(timeline.map(task=>task.id),['same-first','same-second','later']);
 });

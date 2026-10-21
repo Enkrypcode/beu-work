@@ -42,6 +42,14 @@ export function metrics(tasks, now = new Date()) {
 export function priorityFeed(tasks) {
   return [...tasks].filter(t => t.status === 'active').sort((a,b) => Number(isHigh(b)) - Number(isHigh(a)) || a.sort_order - b.sort_order || (a.deadline || '9999').localeCompare(b.deadline || '9999') || a.id.localeCompare(b.id));
 }
+export function timelineWork(tasks) {
+  return [...tasks]
+    .filter(task => task.visibility === 'company' && task.status === 'active' && Boolean(task.deadline))
+    .sort((a, b) => a.deadline.localeCompare(b.deadline)
+      || (Number.isInteger(a.sort_order) ? a.sort_order : Number.MAX_SAFE_INTEGER) - (Number.isInteger(b.sort_order) ? b.sort_order : Number.MAX_SAFE_INTEGER)
+      || (a.created_at || '').localeCompare(b.created_at || '')
+      || a.id.localeCompare(b.id));
+}
 export function attentionWork(tasks, now = new Date()) {
   const today = localDate(now), end = new Date(now);
   end.setDate(now.getDate() + 3);
